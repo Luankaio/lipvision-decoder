@@ -154,7 +154,7 @@ dmypy.json
 !docs/*.png
 
 # LipVision Decoder specific
-lip_crops/
+..lip_crops/
 lip_crops_simple/
 output/
 results/
