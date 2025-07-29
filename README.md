@@ -43,7 +43,80 @@ source .venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-## 🎯 Uso
+## 🐳 Execução com Docker (Recomendado)
+
+O projeto inclui suporte completo ao Docker para facilitar a execução sem configuração manual do ambiente.
+
+### Pré-requisitos Docker
+- Docker instalado
+- Docker Compose instalado
+- Câmera conectada
+- Sistema com interface gráfica (X11 no Linux)
+
+### Passos para Executar
+
+1. **Navegue para o diretório Docker:**
+```bash
+cd infra
+```
+
+2. **Verifique os pré-requisitos:**
+```bash
+./start.sh check
+```
+
+3. **Construa a imagem Docker:**
+```bash
+./start.sh build
+```
+
+4. **Execute o projeto:**
+
+**Método MediaPipe (Recomendado):**
+```bash
+./start.sh run mediapipe
+```
+
+**Método Simples (Mais Rápido):**
+```bash
+./start.sh run simple
+```
+
+### Comandos Úteis Docker
+
+- **Parar containers:**
+```bash
+./start.sh stop
+```
+
+- **Ver logs em tempo real:**
+```bash
+./start.sh logs
+```
+
+- **Abrir shell no container:**
+```bash
+./start.sh shell
+```
+
+- **Limpar tudo (containers e imagens):**
+```bash
+./start.sh clean
+```
+
+- **Ajuda:**
+```bash
+./start.sh help
+```
+
+### Vantagens do Docker
+- ✅ **Ambiente isolado** - Não interfere no sistema host
+- ✅ **Dependências gerenciadas** - Todas as bibliotecas incluídas
+- ✅ **Configuração automática** - X11 e câmera configurados automaticamente
+- ✅ **Portabilidade** - Funciona em qualquer sistema com Docker
+- ✅ **Fácil limpeza** - Remove tudo com um comando
+
+## 🎯 Uso (Execução Nativa)
 
 ### Método Principal (Recomendado)
 ```bash
@@ -81,8 +154,17 @@ lipvision-decoder/
 ├── lip_detector.py           # Detector MediaPipe (avançado)
 ├── simple_lip_detector.py    # Detector Haar Cascades (simples)
 ├── requirements.txt          # Dependências
-├── lip_crops/               # Recortes salvos (MediaPipe)
-├── lip_crops_simple/        # Recortes salvos (método simples)
+├── infra/                    # Configurações Docker
+│   ├── start.sh             # Script de controle Docker
+│   ├── Dockerfile           # Imagem Docker
+│   └── docker-compose.yml   # Orquestração de containers
+├── lipvision/               # Módulos do projeto
+│   └── data_collection/     # Coleta e processamento de dados
+│       ├── data/           # Dados salvos
+│       │   ├── lip_crops/        # Recortes MediaPipe
+│       │   └── lip_crops_simple/ # Recortes método simples
+│       ├── lip_detector.py       # Detector MediaPipe
+│       └── simple_lip_detector.py # Detector simples
 └── README.md               # Documentação
 ```
 
@@ -120,6 +202,30 @@ Este projeto serve como base para:
 - Integração com modelos de linguagem (LLMs)
 
 ## 🐛 Solução de Problemas
+
+### Problemas com Docker
+
+**Erro de permissão X11:**
+```
+qt.qpa.xcb: could not connect to display :0
+```
+**Solução:**
+```bash
+export DISPLAY=:0
+xhost +local:docker
+./start.sh run mediapipe
+```
+
+**Câmera não acessível no Docker:**
+```
+❌ Erro: Câmera não encontrada ou não acessível
+```
+**Soluções:**
+- Verifique se a câmera está em `/dev/video0`
+- Execute com privilégios: o script já configura automaticamente
+- Use `./start.sh check` para diagnosticar
+
+### Problemas de Execução Nativa
 
 ### Câmera não encontrada
 ```
