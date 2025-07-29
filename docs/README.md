@@ -1,6 +1,8 @@
 # 🎥 LipVision Decoder
 
-Multimodal pipeline for lip reading: from visual input to decoded textual output using LLMs.
+This project is a multimodal pipeline for automatic lip reading, designed to process silent video input of a speaker and produce decoded textual output through a combination of computer vision, machine learning, and large language models (LLMs).
+
+The system is built in modular stages, integrating visual feature extraction, temporal modeling of lip movements, and natural language interpretation. This makes it suitable for applications in accessibility, surveillance, silent speech interfaces, and speech reconstruction in noisy or muted environments.
 
 Este projeto implementa um sistema de detecção e recorte de lábios em tempo real usando visão computacional com OpenCV. O sistema serve como base para desenvolvimento de aplicações de leitura labial.
 
