@@ -1,0 +1,47 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dados temporários
+lipvision/data_collection/data/lip_crops/*
+lipvision/data_collection/data/lip_crops_simple/*
+
+# Documentação
+docs/
+*.md
+LICENSE
+
+# Docker
+infra/docker-compose.yml
+infra/docker-compose.dev.yml
+infra/start.sh
+infra/README.md
+infra/Makefile
+
+# Logs
+*.log

@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  lipvision:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    image: lipvision-decoder:latest
+    container_name: lipvision-decoder
+    
+    # Configurações para acesso à câmera e display
+    privileged: true
+    devices:
+      - "/dev/video0:/dev/video0"  # Câmera
+    
+    # Variáveis de ambiente para GUI
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - QT_QPA_PLATFORM=xcb
+      - XAUTHORITY=${XAUTHORITY:-$HOME/.Xauthority}
+    
+    # Volumes para persistir dados e acessar X11
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:ro
+      - ../lipvision/data_collection/data:/app/lipvision/data_collection/data
+      - /dev/snd:/dev/snd  # Audio
+    
+    # Rede do host para simplificar acesso aos recursos
+    network_mode: host
+    
+    # Comando padrão (pode ser sobrescrito)
+    command: ["python", "main.py", "--method", "mediapipe"]
+    
+    # Restart policy
+    restart: unless-stopped
+
+  # Serviço alternativo para método simples
+  lipvision-simple:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    image: lipvision-decoder:latest
+    container_name: lipvision-decoder-simple
+    profiles:
+      - simple
+    
+    privileged: true
+    devices:
+      - "/dev/video0:/dev/video0"
+    
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - QT_QPA_PLATFORM=xcb
+      - XAUTHORITY=${XAUTHORITY:-$HOME/.Xauthority}
+    
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:ro
+      - ../lipvision/data_collection/data:/app/lipvision/data_collection/data
+      - /dev/snd:/dev/snd
+    
+    network_mode: host
+    command: ["python", "main.py", "--method", "simple"]
+    restart: unless-stopped

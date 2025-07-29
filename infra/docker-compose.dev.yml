@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  lipvision-dev:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    image: lipvision-decoder:latest
+    container_name: lipvision-decoder-dev
+    
+    # Configurações para acesso à câmera e display
+    privileged: true
+    devices:
+      - "/dev/video0:/dev/video0"
+    
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - PYTHONPATH=/app
+    
+    # Volumes para desenvolvimento (hot reload)
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ../:/app:rw  # Mount todo o projeto para desenvolvimento
+      - /dev/snd:/dev/snd
+    
+    network_mode: host
+    
+    # Manter container rodando para desenvolvimento
+    command: ["tail", "-f", "/dev/null"]
+    
+    restart: unless-stopped
+
+  # Jupyter notebook para experimentação
+  lipvision-jupyter:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    image: lipvision-decoder:latest
+    container_name: lipvision-jupyter
+    profiles:
+      - jupyter
+    
+    environment:
+      - PYTHONPATH=/app
+    
+    volumes:
+      - ../:/app:rw
+    
+    ports:
+      - "8888:8888"
+    
+    command: ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
+    
+    restart: unless-stopped
