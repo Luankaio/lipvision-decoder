@@ -25,16 +25,12 @@ class LipDetector:
         )
         
         # Índices dos pontos dos lábios no MediaPipe Face Mesh
-        self.LIPS_POINTS = [
-            # Lábio superior externo
-            61, 84, 17, 314, 405, 320, 307, 375, 321, 308, 324, 318,
-            # Lábio inferior externo
-            78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308,
-            # Lábio superior interno
-            80, 81, 82, 13, 312, 311, 310, 415,
-            # Lábio inferior interno
-            78, 95, 88, 178, 87, 14, 317, 402
-        ]
+        # Contorno externo completo dos lábios
+        self.LIPS_OUTER = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308]
+        # Lábio superior (apenas)
+        self.UPPER_LIP = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291]
+        # Lábio inferior (apenas)
+        self.LOWER_LIP = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291]
         
         # Criar diretório para salvar recortes
         self.output_dir = os.path.join("lipvision", "data_collection", "data", self.save_config['mediapipe_output_dir'])
@@ -42,81 +38,86 @@ class LipDetector:
             os.makedirs(self.output_dir)
     
     def get_lip_landmarks(self, landmarks, img_height, img_width):
-        """Extrai as coordenadas dos pontos dos lábios"""
+        """Extrai as coordenadas dos pontos dos lábios (contorno completo)"""
         lip_coords = []
-        
-        # Pontos específicos para contorno dos lábios
-        lip_indices = [
-            # Contorno externo dos lábios
-            61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 375, 321, 308,
-            324, 318, 402, 317, 14, 87, 178, 88, 95
-        ]
-        
-        for idx in lip_indices:
+        for idx in self.LIPS_OUTER:
             x = int(landmarks[idx].x * img_width)
             y = int(landmarks[idx].y * img_height)
             lip_coords.append([x, y])
-        
         return np.array(lip_coords, dtype=np.int32)
+
+    def get_lip_regions_separately(self, landmarks, img_height, img_width):
+        """Extrai as coordenadas dos pontos dos lábios superior e inferior separadamente"""
+        upper = []
+        lower = []
+        for idx in self.UPPER_LIP:
+            x = int(landmarks[idx].x * img_width)
+            y = int(landmarks[idx].y * img_height)
+            upper.append([x, y])
+        for idx in self.LOWER_LIP:
+            x = int(landmarks[idx].x * img_width)
+            y = int(landmarks[idx].y * img_height)
+            lower.append([x, y])
+        return np.array(upper, dtype=np.int32), np.array(lower, dtype=np.int32)
     
     def crop_lip_region(self, image, lip_landmarks):
-        """Recorta a região dos lábios da imagem"""
+        """Recorta a região dos lábios da imagem (com margem aumentada)"""
         # Encontrar bounding box dos lábios
         x_min = np.min(lip_landmarks[:, 0])
         x_max = np.max(lip_landmarks[:, 0])
         y_min = np.min(lip_landmarks[:, 1])
         y_max = np.max(lip_landmarks[:, 1])
-        
-        # Adicionar margem ao redor dos lábios
-        margin = self.mediapipe_config['lip_margin']
+
+        # Aumentar a margem ao redor dos lábios (ex: 2x a margem padrão)
+        margin = int(self.mediapipe_config['lip_margin'] * 2)
         x_min = max(0, x_min - margin)
         x_max = min(image.shape[1], x_max + margin)
         y_min = max(0, y_min - margin)
         y_max = min(image.shape[0], y_max + margin)
-        
+
         # Recortar a região
         lip_crop = image[y_min:y_max, x_min:x_max]
-        
+
         return lip_crop, (x_min, y_min, x_max, y_max)
     
-    def draw_lip_landmarks(self, image, lip_landmarks):
-        """Desenha os pontos dos lábios na imagem"""
-        for point in lip_landmarks:
-            cv2.circle(image, tuple(point), 2, (0, 255, 0), -1)
-        
-        # Desenhar contorno dos lábios
-        cv2.polylines(image, [lip_landmarks], True, (255, 0, 0), 2)
-        
+    def draw_lip_landmarks(self, image, lip_landmarks, landmarks=None, img_height=None, img_width=None):
+        """Desenha os pontos dos lábios na imagem, destacando superior e inferior"""
+        # Desenhar contorno geral
+        if lip_landmarks is not None and len(lip_landmarks) > 0:
+            cv2.polylines(image, [lip_landmarks], True, (255, 255, 0), 2)
+            for point in lip_landmarks:
+                cv2.circle(image, tuple(point), 2, (0, 255, 255), -1)
+        # Se landmarks completos disponíveis, desenhar superior e inferior separados
+        if landmarks is not None and img_height is not None and img_width is not None:
+            upper, lower = self.get_lip_regions_separately(landmarks, img_height, img_width)
+            if len(upper) > 0:
+                cv2.polylines(image, [upper], False, (0, 255, 0), 2)
+                for point in upper:
+                    cv2.circle(image, tuple(point), 2, (0, 255, 0), -1)
+            if len(lower) > 0:
+                cv2.polylines(image, [lower], False, (0, 0, 255), 2)
+                for point in lower:
+                    cv2.circle(image, tuple(point), 2, (0, 0, 255), -1)
         return image
     
     def process_frame(self, frame):
         """Processa um frame para detectar e recortar lábios"""
-        # Converter BGR para RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        # Detectar pontos faciais
         results = self.face_mesh.process(rgb_frame)
-        
         lip_crop = None
         bbox = None
-        
         if results.multi_face_landmarks:
             for face_landmarks in results.multi_face_landmarks:
-                # Obter coordenadas dos lábios
                 h, w, _ = frame.shape
                 lip_landmarks = self.get_lip_landmarks(face_landmarks.landmark, h, w)
-                
-                # Desenhar landmarks dos lábios
-                frame = self.draw_lip_landmarks(frame, lip_landmarks)
-                
+                # Desenhar superior (verde) e inferior (vermelho) além do contorno geral
+                frame = self.draw_lip_landmarks(frame, lip_landmarks, face_landmarks.landmark, h, w)
                 # Recortar região dos lábios
                 lip_crop, bbox = self.crop_lip_region(frame, lip_landmarks)
-                
                 # Desenhar bounding box
                 cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 255), 2)
                 cv2.putText(frame, "Lips", (bbox[0], bbox[1]-10), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        
         return frame, lip_crop, bbox
     
     def save_lip_crop(self, lip_crop):
