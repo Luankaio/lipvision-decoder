@@ -32,7 +32,7 @@ class LipDetector:
         ]
         
         # Criar diretório para salvar recortes
-        self.output_dir = "lip_crops"
+        self.output_dir = "lipvision/data_collection/data/lip_crops"
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
     
@@ -118,7 +118,7 @@ class LipDetector:
         """Salva o recorte dos lábios"""
         if lip_crop is not None and lip_crop.size > 0:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-            filename = f"{self.output_dir}/lip_crop_{timestamp}.jpg"
+            filename = f"{self.output_dir}/lipvision/data/lip_crop_{timestamp}.jpg"
             cv2.imwrite(filename, lip_crop)
             return filename
         return None

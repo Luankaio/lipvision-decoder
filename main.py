@@ -74,12 +74,12 @@ Exemplos:
     try:
         if args.method == "mediapipe":
             print("📡 Carregando detector MediaPipe...")
-            from lip_detector import LipDetector
+            from lipvision.data_collection.lip_detector import LipDetector
             detector = LipDetector()
             detector.run_camera()
         elif args.method == "simple":
             print("📡 Carregando detector simples...")
-            from simple_lip_detector import SimpleLipDetector
+            from lipvision.data_collection.simple_lip_detector import SimpleLipDetector
             detector = SimpleLipDetector()
             detector.run_camera()
     

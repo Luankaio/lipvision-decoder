@@ -7,8 +7,8 @@ Este arquivo demonstra como usar as classes de detecção em seus próprios proj
 
 import cv2
 import numpy as np
-from lip_detector import LipDetector
-from simple_lip_detector import SimpleLipDetector
+from lipvision.data_collection.lip_detector import LipDetector
+from lipvision.data_collection.simple_lip_detector import SimpleLipDetector
 
 def example_mediapipe_usage():
     """Exemplo de uso do detector MediaPipe"""

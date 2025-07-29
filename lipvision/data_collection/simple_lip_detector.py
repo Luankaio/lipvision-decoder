@@ -10,7 +10,7 @@ class SimpleLipDetector:
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         
         # Criar diretório para salvar recortes
-        self.output_dir = "lip_crops_simple"
+        self.output_dir = "lipvision/data_collection/data/lip_crops_simple"
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
     
@@ -97,7 +97,7 @@ class SimpleLipDetector:
         """Salva o recorte da boca"""
         if mouth_crop is not None and mouth_crop.size > 0:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-            filename = f"{self.output_dir}/mouth_crop_{timestamp}.jpg"
+            filename = f"{self.output_dir}/lipvision/data/mouth_crop_{timestamp}.jpg"
             cv2.imwrite(filename, mouth_crop)
             return filename
         return None
