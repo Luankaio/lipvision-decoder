@@ -1,10 +1,11 @@
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 
 import cv2
 import time
 from lipvision.data_collection.lip_detector import LipDetector
+
 
 
 EXTRACTION_DIR = os.path.join(os.path.dirname(__file__), 'extraction')
@@ -15,7 +16,7 @@ os.makedirs(EXTRACTION_DIR, exist_ok=True)
 # Distância mínima (em pixels) entre os landmarks centrais dos lábios para considerar a boca aberta
 MOUTH_OPEN_PIXEL_DISTANCE = 3
 # Janela de silêncio (em segundos) após fechar a boca para encerrar a gravação
-POST_SILENCE_WINDOW = 0.7
+POST_SILENCE_WINDOW = 0.5
 
 
 # Nova versão: captura da câmera, salva recortes de "fala" em extraction
@@ -147,10 +148,6 @@ class SpeakingExtractor:
         else:
             raise RuntimeError("Detector desconhecido para detecção de boca aberta")
 
-
-if __name__ == '__main__':
-    extractor = SpeakingExtractor()
-    extractor.run()
 
 if __name__ == '__main__':
     extractor = SpeakingExtractor()
