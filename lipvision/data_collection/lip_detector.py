@@ -3,6 +3,7 @@ import numpy as np
 import mediapipe as mp
 import os
 from datetime import datetime
+from .config import get_config
 
 class LipDetector:
     def __init__(self):
@@ -11,12 +12,16 @@ class LipDetector:
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
         
+        # Carregar configurações
+        self.mediapipe_config = get_config('mediapipe')
+        self.save_config = get_config('save')
+        
         # Configuração do Face Mesh
         self.face_mesh = self.mp_face_mesh.FaceMesh(
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
+            max_num_faces=self.mediapipe_config['max_num_faces'],
+            refine_landmarks=self.mediapipe_config['refine_landmarks'],
+            min_detection_confidence=self.mediapipe_config['min_detection_confidence'],
+            min_tracking_confidence=self.mediapipe_config['min_tracking_confidence']
         )
         
         # Índices dos pontos dos lábios no MediaPipe Face Mesh
@@ -32,7 +37,7 @@ class LipDetector:
         ]
         
         # Criar diretório para salvar recortes
-        self.output_dir = "lipvision/data_collection/data/lip_crops"
+        self.output_dir = os.path.join("lipvision", "data_collection", "data", self.save_config['mediapipe_output_dir'])
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
     
@@ -63,7 +68,7 @@ class LipDetector:
         y_max = np.max(lip_landmarks[:, 1])
         
         # Adicionar margem ao redor dos lábios
-        margin = 20
+        margin = self.mediapipe_config['lip_margin']
         x_min = max(0, x_min - margin)
         x_max = min(image.shape[1], x_max + margin)
         y_min = max(0, y_min - margin)
@@ -117,9 +122,11 @@ class LipDetector:
     def save_lip_crop(self, lip_crop):
         """Salva o recorte dos lábios"""
         if lip_crop is not None and lip_crop.size > 0:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-            filename = f"{self.output_dir}/lipvision/data/lip_crop_{timestamp}.jpg"
-            cv2.imwrite(filename, lip_crop)
+            timestamp = datetime.now().strftime(self.save_config['timestamp_format'])[:-3]
+            filename = f"{self.output_dir}/lip_crop_{timestamp}.jpg"
+            
+            # Salvar com qualidade configurada
+            cv2.imwrite(filename, lip_crop, [cv2.IMWRITE_JPEG_QUALITY, self.save_config['jpeg_quality']])
             return filename
         return None
     

@@ -2,15 +2,20 @@ import cv2
 import numpy as np
 import os
 from datetime import datetime
+from .config import get_config
 
 class SimpleLipDetector:
     def __init__(self):
         """Inicializa o detector simples usando Haar Cascades"""
+        # Carregar configurações
+        self.simple_config = get_config('simple')
+        self.save_config = get_config('save')
+        
         # Carregar classificadores Haar para face e boca
         self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         
         # Criar diretório para salvar recortes
-        self.output_dir = "lipvision/data_collection/data/lip_crops_simple"
+        self.output_dir = os.path.join("lipvision", "data_collection", "data", self.save_config['simple_output_dir'])
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
     
@@ -19,11 +24,14 @@ class SimpleLipDetector:
         # A boca geralmente está na metade inferior da face
         h, w = face_roi.shape[:2]
         
-        # Definir região de interesse para a boca (terço inferior da face)
-        mouth_y_start = int(h * 0.6)
-        mouth_y_end = h
-        mouth_x_start = int(w * 0.2)
-        mouth_x_end = int(w * 0.8)
+        # Usar configurações do arquivo config.py
+        mouth_region = self.simple_config['mouth_region']
+        
+        # Definir região de interesse para a boca
+        mouth_y_start = int(h * mouth_region['y_start_ratio'])
+        mouth_y_end = int(h * mouth_region['y_end_ratio'])
+        mouth_x_start = int(w * mouth_region['x_start_ratio'])
+        mouth_x_end = int(w * mouth_region['x_end_ratio'])
         
         mouth_roi = face_roi[mouth_y_start:mouth_y_end, mouth_x_start:mouth_x_end]
         
@@ -55,7 +63,9 @@ class SimpleLipDetector:
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
         # Detectar faces
-        faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
+        faces = self.face_cascade.detectMultiScale(gray, 
+                                                    self.simple_config['scale_factor'], 
+                                                    self.simple_config['min_neighbors'])
         
         mouth_crop = None
         mouth_bbox = None
@@ -96,9 +106,11 @@ class SimpleLipDetector:
     def save_mouth_crop(self, mouth_crop):
         """Salva o recorte da boca"""
         if mouth_crop is not None and mouth_crop.size > 0:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-            filename = f"{self.output_dir}/lipvision/data/mouth_crop_{timestamp}.jpg"
-            cv2.imwrite(filename, mouth_crop)
+            timestamp = datetime.now().strftime(self.save_config['timestamp_format'])[:-3]
+            filename = f"{self.output_dir}/mouth_crop_{timestamp}.jpg"
+            
+            # Salvar com qualidade configurada
+            cv2.imwrite(filename, mouth_crop, [cv2.IMWRITE_JPEG_QUALITY, self.save_config['jpeg_quality']])
             return filename
         return None
     
