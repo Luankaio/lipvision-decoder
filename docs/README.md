@@ -150,22 +150,51 @@ Durante a execução:
 
 ```
 lipvision-decoder/
-├── main.py                    # Script principal
-├── lip_detector.py           # Detector MediaPipe (avançado)
-├── simple_lip_detector.py    # Detector Haar Cascades (simples)
-├── requirements.txt          # Dependências
-├── infra/                    # Configurações Docker
-│   ├── start.sh             # Script de controle Docker
-│   ├── Dockerfile           # Imagem Docker
-│   └── docker-compose.yml   # Orquestração de containers
-├── lipvision/               # Módulos do projeto
-│   └── data_collection/     # Coleta e processamento de dados
-│       ├── data/           # Dados salvos
-│       │   ├── lip_crops/        # Recortes MediaPipe
-│       │   └── lip_crops_simple/ # Recortes método simples
-│       ├── lip_detector.py       # Detector MediaPipe
-│       └── simple_lip_detector.py # Detector simples
-└── README.md               # Documentação
+├── main.py
+├── requirements.txt
+├── run.sh
+├── start.sh
+├── infra/
+│   ├── docker-compose.dev.yml
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   ├── healthcheck.py
+│   ├── Makefile
+│   ├── README.md
+│   ├── start.sh
+│   ├── data_collection/
+│   │   └── DockerFile
+│   ├── llm_decoder/
+│   │   └── DockerFile
+│   └── model_training/
+│       └── DockerFile
+├── lipvision/
+│   ├── data_collection/
+│   │   ├── config.py
+│   │   ├── examples.py
+│   │   ├── lip_detector.py
+│   │   ├── simple_lip_detector.py
+│   │   ├── use_cases.py
+│   │   ├── data/
+│   │   │   ├── lip_crops/
+│   │   │   └── lip_crops_simple/
+│   │   └── __pycache__/
+│   ├── llm_decoder/
+│   │   └── init.py
+│   ├── model_training/
+│   │   └── init.py
+│   ├── pipeline/
+│   │   └── init.py
+│   └── tests/
+│       ├── init.py
+│       └── test_lip_detection.py
+├── utils/
+│   └── init.py
+├── docs/
+│   ├── DEVELOPMENT.md
+│   ├── LICENSE
+│   └── README.md
+└── __pycache__/
 ```
 
 ## 🔧 Métodos de Detecção
