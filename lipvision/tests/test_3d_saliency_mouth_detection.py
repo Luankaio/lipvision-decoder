@@ -229,17 +229,126 @@ def create_mouth_visualization(mouth_data):
     
     return visualization
 
+def create_advanced_mouth_visualization(mouth_data):
+    """
+    Cria uma visualização avançada com múltiplos tipos de análise da boca.
+    
+    Args:
+        mouth_data: Dicionário com dados da boca
+        
+    Returns:
+        Imagem com grid de diferentes visualizações
+    """
+    # Extrair dados
+    lip_crop = mouth_data['lip_crop']
+    mouth_saliency_map = mouth_data['mouth_saliency_map']
+    mouth_open = mouth_data['mouth_open']
+    saliency_ratio = mouth_data['saliency_ratio']
+    max_saliency = mouth_data['max_saliency']
+    
+    # Tamanho de cada visualização
+    cell_width = 200
+    cell_height = 150
+    grid_cols = 3
+    grid_rows = 2
+    
+    # Canvas total
+    total_width = grid_cols * cell_width
+    total_height = grid_rows * cell_height + 80  # Espaço extra para texto
+    canvas = np.zeros((total_height, total_width, 3), dtype=np.uint8)
+    
+    # Redimensionar recorte da boca para as células
+    lip_resized = cv2.resize(lip_crop, (cell_width, cell_height))
+    saliency_resized = cv2.resize(mouth_saliency_map, (cell_width, cell_height))
+    
+    # 1. Original (canto superior esquerdo)
+    canvas[0:cell_height, 0:cell_width] = lip_resized
+    cv2.putText(canvas, "Original", (5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    
+    # 2. Saliência Hot (canto superior centro)
+    saliency_hot = cv2.applyColorMap(saliency_resized, cv2.COLORMAP_HOT)
+    canvas[0:cell_height, cell_width:2*cell_width] = saliency_hot
+    cv2.putText(canvas, "Hot Saliency", (cell_width+5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    
+    # 3. Saliência Jet (canto superior direito)
+    saliency_jet = cv2.applyColorMap(saliency_resized, cv2.COLORMAP_JET)
+    canvas[0:cell_height, 2*cell_width:3*cell_width] = saliency_jet
+    cv2.putText(canvas, "Jet Saliency", (2*cell_width+5, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    
+    # 4. Saliência Viridis (canto inferior esquerdo)
+    saliency_viridis = cv2.applyColorMap(saliency_resized, cv2.COLORMAP_VIRIDIS)
+    canvas[cell_height:2*cell_height, 0:cell_width] = saliency_viridis
+    cv2.putText(canvas, "Viridis Saliency", (5, cell_height+20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    
+    # 5. Análise de bordas (canto inferior centro)
+    gray_lip = cv2.cvtColor(lip_resized, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray_lip, 50, 150)
+    edges_colored = cv2.applyColorMap(edges, cv2.COLORMAP_COOL)
+    canvas[cell_height:2*cell_height, cell_width:2*cell_width] = edges_colored
+    cv2.putText(canvas, "Edge Analysis", (cell_width+5, cell_height+20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    
+    # 6. Combinação Original + Saliência (canto inferior direito)
+    # Converter original para float e normalizar
+    lip_float = lip_resized.astype(np.float32) / 255.0
+    saliency_float = saliency_resized.astype(np.float32) / 255.0
+    
+    # Criar overlay com transparência
+    alpha = 0.6
+    combined = lip_float * alpha + cv2.applyColorMap(saliency_resized, cv2.COLORMAP_RAINBOW).astype(np.float32) / 255.0 * (1 - alpha)
+    combined = (combined * 255).astype(np.uint8)
+    
+    canvas[cell_height:2*cell_height, 2*cell_width:3*cell_width] = combined
+    cv2.putText(canvas, "Overlay", (2*cell_width+5, cell_height+20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+    
+    # Área de informações na parte inferior
+    info_y = 2 * cell_height + 10
+    
+    # Status da boca com fundo colorido
+    status_text = "BOCA ABERTA" if mouth_open else "BOCA FECHADA"
+    status_color = (0, 255, 0) if mouth_open else (0, 0, 255)
+    
+    # Criar retângulo de fundo para o status
+    cv2.rectangle(canvas, (10, info_y-5), (250, info_y+25), status_color, -1)
+    cv2.putText(canvas, status_text, (15, info_y+15), 
+               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    
+    # Métricas com cores diferentes
+    metrics_x = 270
+    cv2.putText(canvas, f"Saliencia Media: {saliency_ratio:.3f}", 
+               (metrics_x, info_y+15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+    
+    cv2.putText(canvas, f"Saliencia Max: {max_saliency}", 
+               (metrics_x, info_y+35), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+    
+    cv2.putText(canvas, f"Threshold: {MOUTH_OPEN_SALIENCY_MIN:.3f}", 
+               (metrics_x, info_y+55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
+    
+    # Adicionar linhas de grade
+    # Linhas verticais
+    cv2.line(canvas, (cell_width, 0), (cell_width, 2*cell_height), (64, 64, 64), 1)
+    cv2.line(canvas, (2*cell_width, 0), (2*cell_width, 2*cell_height), (64, 64, 64), 1)
+    
+    # Linha horizontal
+    cv2.line(canvas, (0, cell_height), (total_width, cell_height), (64, 64, 64), 1)
+    
+    # Linha separadora da área de informações
+    cv2.line(canvas, (0, 2*cell_height), (total_width, 2*cell_height), (128, 128, 128), 2)
+    
+    return canvas
+
 def test_3d_saliency_mouth_detection():
     """Testa detecção de boca aberta usando 3D Saliency"""
     print("=== TESTE: Detecção de Boca Aberta com 3D Saliency ===")
     print("🎥 Janela principal: Visualização geral com detecção")
-    print("👄 Janela separada: Análise detalhada da região da boca")
+    print("👄 Janela básica: Análise simples da região da boca")
+    print("🎨 Janela avançada: Múltiplas visualizações coloridas")
     print()
     print("Controles:")
     print("Pressione 'q' para sair")
     print("Pressione 'r' para resetar buffer de frames")
     print("Pressione '+' para aumentar threshold")
     print("Pressione '-' para diminuir threshold")
+    print("💡 Todas as janelas são redimensionáveis!")
     print()
     
     detector = SaliencyMouthDetector()
@@ -269,10 +378,15 @@ def test_3d_saliency_mouth_detection():
         if len(result) == 3:  # Debug mode retorna 3 valores
             mouth_open, debug_frame, mouth_data = result
             
-            # Criar janela separada para visualização detalhada da boca
+            # Criar janelas separadas para visualização detalhada da boca
             if mouth_data:
+                # Janela básica
                 mouth_display = create_mouth_visualization(mouth_data)
                 cv2.imshow('Mouth Region Analysis', mouth_display)
+                
+                # Janela avançada com múltiplas visualizações
+                advanced_display = create_advanced_mouth_visualization(mouth_data)
+                cv2.imshow('Advanced Mouth Analysis', advanced_display)
         else:  # Modo normal retorna 2 valores
             mouth_open, debug_frame = result
         
@@ -288,13 +402,14 @@ def test_3d_saliency_mouth_detection():
                    (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         
         # Mostrar instruções
-        cv2.putText(debug_frame, "q:sair r:reset +:++ -:-- | Janela da boca eh redimensionavel", 
+        cv2.putText(debug_frame, "q:sair r:reset +:++ -:-- | 3 janelas redimensionaveis", 
                    (10, debug_frame.shape[0]-20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         
         cv2.imshow('3D Saliency Mouth Detection', debug_frame)
         
-        # Tornar a janela da boca redimensionável
+        # Tornar as janelas redimensionáveis
         cv2.namedWindow('Mouth Region Analysis', cv2.WINDOW_NORMAL)
+        cv2.namedWindow('Advanced Mouth Analysis', cv2.WINDOW_NORMAL)
         
         # Processar teclas
         key = cv2.waitKey(1) & 0xFF
