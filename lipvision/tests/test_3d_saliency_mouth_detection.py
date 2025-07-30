@@ -6,7 +6,11 @@ Este teste usa 3D Saliency para detectar movimentos/mudanças na região da boca
 e determinar quando ela está aberta. A saliência 3D considera mudanças temporais
 entre frames consecutivos para identificar regiões de interesse.
 """
-
+"""
+entender oq e saliencia temporal e estatica
+multiplicador de amplificacao
+tamanho do filtro gaussiano
+"""
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
@@ -21,6 +25,12 @@ SALIENCY_THRESHOLD = 30  # Threshold para considerar região saliente
 MOUTH_REGION_RATIO = 0.4  # Proporção da face que corresponde à região da boca
 FRAME_BUFFER_SIZE = 3  # Número de frames para análise temporal
 MOUTH_OPEN_SALIENCY_MIN = 0.15  # Saliência mínima na região da boca para considerar aberta
+
+# Parâmetros de intensidade da saliência (ajustáveis em tempo real)
+TEMPORAL_SALIENCY_WEIGHT = 0.7  # Peso da saliência temporal (0.0 a 1.0)
+STATIC_SALIENCY_WEIGHT = 0.3    # Peso da saliência estática (0.0 a 1.0)
+SALIENCY_AMPLIFICATION = 1.0    # Multiplicador de amplificação da saliência
+GAUSSIAN_BLUR_SIZE = 5          # Tamanho do filtro Gaussiano para suavização
 
 class SaliencyMouthDetector:
     def __init__(self):
@@ -58,17 +68,24 @@ class SaliencyMouthDetector:
         # Normalizar
         temporal_diff = temporal_diff / len(gray_frames)
         
-        # Aplicar filtro Gaussiano para suavizar
-        temporal_diff = cv2.GaussianBlur(temporal_diff, (5, 5), 0)
+        # Aplicar filtro Gaussiano para suavizar (tamanho ajustável)
+        blur_size = max(1, int(GAUSSIAN_BLUR_SIZE))
+        if blur_size % 2 == 0:  # Garantir que seja ímpar
+            blur_size += 1
+        temporal_diff = cv2.GaussianBlur(temporal_diff, (blur_size, blur_size), 0)
         
-        # Combinar com saliência estática
+        # Combinar com saliência estática usando pesos ajustáveis
         success, static_saliency = self.saliency.computeSaliency(current_gray)
         if success:
             static_saliency = (static_saliency * 255).astype(np.uint8)
-            # Combinar saliência temporal e estática
-            combined_saliency = 0.7 * temporal_diff + 0.3 * static_saliency.astype(np.float32)
+            # Combinar saliência temporal e estática com pesos ajustáveis
+            combined_saliency = (TEMPORAL_SALIENCY_WEIGHT * temporal_diff + 
+                               STATIC_SALIENCY_WEIGHT * static_saliency.astype(np.float32))
         else:
             combined_saliency = temporal_diff
+        
+        # Aplicar amplificação da saliência
+        combined_saliency = combined_saliency * SALIENCY_AMPLIFICATION
         
         # Normalizar para 0-255
         combined_saliency = cv2.normalize(combined_saliency, None, 0, 255, cv2.NORM_MINMAX)
@@ -95,20 +112,27 @@ class SaliencyMouthDetector:
         Detecta se a boca está aberta usando 3D Saliency aplicado apenas na região do recorte da boca.
         
         Estratégia:
-        1. Detecta a face e região da boca usando MediaPipe
-        2. Extrai o recorte da boca
+        1. Detecta a face e região da boca usando MediaPipe no frame limpo
+        2. Extrai o recorte da boca do frame original (sem anotações)
         3. Mantém buffer de recortes da boca ao longo do tempo
-        4. Computa 3D Saliency apenas no recorte da boca
+        4. Computa 3D Saliency apenas no recorte da boca limpo
         5. Boca aberta = alta saliência no recorte da boca
         """
-        # Detectar região da boca usando MediaPipe
+        # Manter uma cópia limpa do frame original (sem anotações MediaPipe)
+        clean_frame = frame.copy()
+        
+        # Detectar região da boca usando MediaPipe (isso gerará as anotações no processed_frame)
         processed_frame, lip_crop, bbox = self.lip_detector.process_frame(frame.copy())
         
         if bbox is None or lip_crop is None or lip_crop.size == 0:
             return False, frame if debug else frame
         
-        # Redimensionar recorte da boca para tamanho consistente
-        mouth_crop_resized = cv2.resize(lip_crop, (64, 32))
+        # Extrair recorte da boca do frame LIMPO (sem anotações MediaPipe)
+        x1, y1, x2, y2 = bbox
+        clean_lip_crop = clean_frame[y1:y2, x1:x2]
+        
+        # Redimensionar recorte da boca limpo para tamanho consistente
+        mouth_crop_resized = cv2.resize(clean_lip_crop, (64, 32))
         
         # Atualizar buffer de recortes da boca
         if len(self.frame_buffer) >= FRAME_BUFFER_SIZE:
@@ -146,9 +170,9 @@ class SaliencyMouthDetector:
             # Criar visualização do mapa de saliência do recorte da boca
             mouth_saliency_colored = cv2.applyColorMap(mouth_saliency_map, cv2.COLORMAP_HOT)
             
-            # Preparar dados para janela separada da boca
+            # Preparar dados para janela separada da boca (usando recorte limpo)
             mouth_data = {
-                'lip_crop': lip_crop,
+                'lip_crop': clean_lip_crop,  # Usar recorte limpo sem anotações
                 'mouth_saliency_map': mouth_saliency_map,
                 'mouth_saliency_colored': mouth_saliency_colored,
                 'mouth_open': mouth_open,
@@ -323,6 +347,13 @@ def create_advanced_mouth_visualization(mouth_data):
     cv2.putText(canvas, f"Threshold: {MOUTH_OPEN_SALIENCY_MIN:.3f}", 
                (metrics_x, info_y+55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
     
+    # Adicionar parâmetros de saliência
+    cv2.putText(canvas, f"Temp: {TEMPORAL_SALIENCY_WEIGHT:.1f} | Static: {STATIC_SALIENCY_WEIGHT:.1f}", 
+               (10, info_y+50), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (128, 255, 128), 1)
+    
+    cv2.putText(canvas, f"Amplif: {SALIENCY_AMPLIFICATION:.1f} | Blur: {int(GAUSSIAN_BLUR_SIZE)}", 
+               (10, info_y+65), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (128, 255, 128), 1)
+    
     # Adicionar linhas de grade
     # Linhas verticais
     cv2.line(canvas, (cell_width, 0), (cell_width, 2*cell_height), (64, 64, 64), 1)
@@ -343,11 +374,17 @@ def test_3d_saliency_mouth_detection():
     print("👄 Janela básica: Análise simples da região da boca")
     print("🎨 Janela avançada: Múltiplas visualizações coloridas")
     print()
-    print("Controles:")
-    print("Pressione 'q' para sair")
-    print("Pressione 'r' para resetar buffer de frames")
-    print("Pressione '+' para aumentar threshold")
-    print("Pressione '-' para diminuir threshold")
+    print("Controles de DETECÇÃO:")
+    print("  q: sair")
+    print("  r: resetar buffer de frames")
+    print("  +/-: ajustar threshold de detecção")
+    print()
+    print("Controles de SALIÊNCIA:")
+    print("  t/T: diminuir/aumentar peso saliência temporal")
+    print("  s/S: diminuir/aumentar peso saliência estática")
+    print("  a/A: diminuir/aumentar amplificação geral")
+    print("  b/B: diminuir/aumentar blur gaussiano")
+    print()
     print("💡 Todas as janelas são redimensionáveis!")
     print()
     
@@ -360,7 +397,7 @@ def test_3d_saliency_mouth_detection():
     
     print("✅ Câmera aberta com sucesso")
     
-    global MOUTH_OPEN_SALIENCY_MIN
+    global MOUTH_OPEN_SALIENCY_MIN, TEMPORAL_SALIENCY_WEIGHT, STATIC_SALIENCY_WEIGHT, SALIENCY_AMPLIFICATION, GAUSSIAN_BLUR_SIZE
     frame_count = 0
     
     while True:
@@ -401,9 +438,15 @@ def test_3d_saliency_mouth_detection():
         cv2.putText(debug_frame, f"Frame: {frame_count}", 
                    (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         
+        # Mostrar parâmetros de saliência
+        cv2.putText(debug_frame, f"Temp:{TEMPORAL_SALIENCY_WEIGHT:.1f} Static:{STATIC_SALIENCY_WEIGHT:.1f}", 
+                   (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (128, 255, 128), 1)
+        cv2.putText(debug_frame, f"Amplif:{SALIENCY_AMPLIFICATION:.1f} Blur:{int(GAUSSIAN_BLUR_SIZE)}", 
+                   (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (128, 255, 128), 1)
+        
         # Mostrar instruções
-        cv2.putText(debug_frame, "q:sair r:reset +:++ -:-- | 3 janelas redimensionaveis", 
-                   (10, debug_frame.shape[0]-20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(debug_frame, "q:sair r:reset +/-:thresh t/T:temp s/S:static a/A:amplif b/B:blur", 
+                   (10, debug_frame.shape[0]-20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
         
         cv2.imshow('3D Saliency Mouth Detection', debug_frame)
         
@@ -418,12 +461,50 @@ def test_3d_saliency_mouth_detection():
         elif key == ord('r'):
             detector.frame_buffer = []
             print("🔄 Buffer de frames resetado")
+        
+        # Controles de threshold de detecção
         elif key == ord('+') or key == ord('='):
             MOUTH_OPEN_SALIENCY_MIN = min(1.0, MOUTH_OPEN_SALIENCY_MIN + 0.01)
             print(f"📈 Threshold aumentado para: {MOUTH_OPEN_SALIENCY_MIN:.3f}")
         elif key == ord('-') or key == ord('_'):
             MOUTH_OPEN_SALIENCY_MIN = max(0.0, MOUTH_OPEN_SALIENCY_MIN - 0.01)
             print(f"📉 Threshold diminuído para: {MOUTH_OPEN_SALIENCY_MIN:.3f}")
+        
+        # Controles de saliência temporal
+        elif key == ord('t'):
+            TEMPORAL_SALIENCY_WEIGHT = max(0.0, TEMPORAL_SALIENCY_WEIGHT - 0.1)
+            STATIC_SALIENCY_WEIGHT = 1.0 - TEMPORAL_SALIENCY_WEIGHT
+            print(f"⏰ Saliência temporal: {TEMPORAL_SALIENCY_WEIGHT:.1f} | estática: {STATIC_SALIENCY_WEIGHT:.1f}")
+        elif key == ord('T'):
+            TEMPORAL_SALIENCY_WEIGHT = min(1.0, TEMPORAL_SALIENCY_WEIGHT + 0.1)
+            STATIC_SALIENCY_WEIGHT = 1.0 - TEMPORAL_SALIENCY_WEIGHT
+            print(f"⏰ Saliência temporal: {TEMPORAL_SALIENCY_WEIGHT:.1f} | estática: {STATIC_SALIENCY_WEIGHT:.1f}")
+        
+        # Controles de saliência estática
+        elif key == ord('s'):
+            STATIC_SALIENCY_WEIGHT = max(0.0, STATIC_SALIENCY_WEIGHT - 0.1)
+            TEMPORAL_SALIENCY_WEIGHT = 1.0 - STATIC_SALIENCY_WEIGHT
+            print(f"📊 Saliência estática: {STATIC_SALIENCY_WEIGHT:.1f} | temporal: {TEMPORAL_SALIENCY_WEIGHT:.1f}")
+        elif key == ord('S'):
+            STATIC_SALIENCY_WEIGHT = min(1.0, STATIC_SALIENCY_WEIGHT + 0.1)
+            TEMPORAL_SALIENCY_WEIGHT = 1.0 - STATIC_SALIENCY_WEIGHT
+            print(f"📊 Saliência estática: {STATIC_SALIENCY_WEIGHT:.1f} | temporal: {TEMPORAL_SALIENCY_WEIGHT:.1f}")
+        
+        # Controles de amplificação
+        elif key == ord('a'):
+            SALIENCY_AMPLIFICATION = max(0.1, SALIENCY_AMPLIFICATION - 0.1)
+            print(f"🔊 Amplificação da saliência: {SALIENCY_AMPLIFICATION:.1f}")
+        elif key == ord('A'):
+            SALIENCY_AMPLIFICATION = min(5.0, SALIENCY_AMPLIFICATION + 0.1)
+            print(f"🔊 Amplificação da saliência: {SALIENCY_AMPLIFICATION:.1f}")
+        
+        # Controles de blur gaussiano
+        elif key == ord('b'):
+            GAUSSIAN_BLUR_SIZE = max(1, GAUSSIAN_BLUR_SIZE - 2)
+            print(f"🌫️  Blur gaussiano: {int(GAUSSIAN_BLUR_SIZE)}")
+        elif key == ord('B'):
+            GAUSSIAN_BLUR_SIZE = min(21, GAUSSIAN_BLUR_SIZE + 2)
+            print(f"🌫️  Blur gaussiano: {int(GAUSSIAN_BLUR_SIZE)}")
     
     cap.release()
     cv2.destroyAllWindows()
