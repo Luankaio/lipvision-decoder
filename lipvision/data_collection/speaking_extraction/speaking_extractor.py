@@ -16,7 +16,9 @@ os.makedirs(EXTRACTION_DIR, exist_ok=True)
 # Distância mínima (em pixels) entre os landmarks centrais dos lábios para considerar a boca aberta
 MOUTH_OPEN_PIXEL_DISTANCE = 3
 # Janela de silêncio (em segundos) após fechar a boca para encerrar a gravação
-POST_SILENCE_WINDOW = 0.5
+POST_SILENCE_WINDOW = 0.3
+# Tempo de pre-gravação (em segundos) antes da detecção da abertura da boca
+PRE_DETECTION_BUFFER = 0.15
 
 
 # Nova versão: captura da câmera, salva recortes de "fala" em extraction
@@ -24,7 +26,8 @@ POST_SILENCE_WINDOW = 0.5
 from lipvision.data_collection.simple_lip_detector import SimpleLipDetector
 
 class SpeakingExtractor:
-    def __init__(self, method='mediapipe', post_silence_window=POST_SILENCE_WINDOW, camera_index=0, fps=30):
+    def __init__(self, method='mediapipe', post_silence_window=POST_SILENCE_WINDOW, 
+                 pre_detection_buffer=PRE_DETECTION_BUFFER, camera_index=0, fps=30):
         if method == 'mediapipe':
             self.detector = LipDetector()
         elif method == 'simple':
@@ -34,6 +37,11 @@ class SpeakingExtractor:
         self.post_silence_window = post_silence_window
         self.camera_index = camera_index
         self.fps = fps
+        
+        # Buffer circular para gravar antes da detecção
+        self.pre_detection_seconds = pre_detection_buffer
+        self.pre_buffer_size = int(self.fps * self.pre_detection_seconds)
+        self.frame_buffer = []  # Buffer circular de frames
 
     def run(self):
         cap = cv2.VideoCapture(self.camera_index)
@@ -42,62 +50,79 @@ class SpeakingExtractor:
             return
 
         print("Iniciando extração de segmentos de fala (pressione 'q' para sair)")
+        print(f"Pre-buffer: {self.pre_detection_seconds}s ({self.pre_buffer_size} frames)")
+        
         speaking = False
         post_silence_counter = 0
-        segment_frames = []
-        segment_count = 0
-        last_save_time = None
-
+        silence_frames = int(self.post_silence_window * self.fps)
+        segment_id = 1
+        writer = None
+        current_output_path = None
 
         while True:
             ret, frame = cap.read()
             if not ret:
                 print("Erro ao capturar frame da câmera")
                 break
+            
             frame = cv2.flip(frame, 1)
-
+            
+            # Sempre adicionar frame ao buffer circular
+            self.add_frame_to_buffer(frame)
+            
             # Detectar se a boca está aberta
             mouth_open, debug_frame = self._is_mouth_open(frame, debug=True)
 
-            # Mostrar feedback visual
-            cv2.putText(debug_frame, f"Falando: {'SIM' if speaking else 'NAO'}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0) if speaking else (0,0,255), 2)
-            cv2.imshow('Speaking Extraction', debug_frame)
-
-            if mouth_open:
-                if not speaking:
-                    segment_frames = []
-                    speaking = True
-                    post_silence_counter = 0
-                    print("🟢 Falando (boca aberta)")
-                segment_frames.append(frame.copy())
+            if mouth_open and not speaking:
+                # Começou a falar - iniciar gravação COM pre-buffer
+                speaking = True
                 post_silence_counter = 0
-            else:
-                if speaking:
+                writer, current_output_path = self.start_recording_with_prebuffer(segment_id)
+
+            if speaking:
+                if writer is not None:
+                    writer.write(frame)
+
+                if not mouth_open:
                     post_silence_counter += 1
-                    segment_frames.append(frame.copy())
-                    if post_silence_counter >= int(self.post_silence_window * self.fps):
-                        # Salvar segmento
-                        if len(segment_frames) > 0:
-                            timestamp = time.strftime('%Y%m%d_%H%M%S')
-                            out_path = os.path.join(EXTRACTION_DIR, f'segment_{segment_count}_{timestamp}.mp4')
-                            h, w = segment_frames[0].shape[:2]
-                            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                            out = cv2.VideoWriter(out_path, fourcc, self.fps, (w, h))
-                            for f in segment_frames:
-                                out.write(f)
-                            out.release()
-                            print(f"💾 Segmento salvo: {out_path}")
-                            segment_count += 1
+                    if post_silence_counter >= silence_frames:
+                        # Parou de falar - finalizar gravação
                         speaking = False
-                        segment_frames = []
                         post_silence_counter = 0
+                        if writer is not None:
+                            writer.release()
+                            writer = None
+                        print(f"💾 Segmento salvo: {current_output_path}")
+                        segment_id += 1
+                else:
+                    post_silence_counter = 0
+
+            # Mostrar visualização
+            status = "FALANDO" if speaking else "SILENCIO"
+            color = (0, 255, 0) if mouth_open else (0, 0, 255)
+            cv2.putText(debug_frame, f"{status}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+            cv2.putText(debug_frame, f"Buffer: {len(self.frame_buffer)}/{self.pre_buffer_size} frames", 
+                       (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            cv2.putText(debug_frame, f"Pre-buffer: {self.pre_detection_seconds}s", 
+                       (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            
+            if speaking and post_silence_counter > 0:
+                remaining_frames = silence_frames - post_silence_counter
+                cv2.putText(debug_frame, f"Encerrando em: {remaining_frames} frames", 
+                           (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+
+            cv2.imshow('Speaking Extraction', debug_frame)
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
                 break
 
+        # Cleanup
+        if writer is not None:
+            writer.release()
         cap.release()
         cv2.destroyAllWindows()
+        print(f"Extração finalizada. {segment_id-1} segmentos salvos.")
 
     def _is_mouth_open(self, frame, debug=False):
         """
@@ -147,6 +172,33 @@ class SpeakingExtractor:
             return False, frame
         else:
             raise RuntimeError("Detector desconhecido para detecção de boca aberta")
+
+    def add_frame_to_buffer(self, frame):
+        """Adiciona frame ao buffer circular"""
+        self.frame_buffer.append(frame.copy())
+        if len(self.frame_buffer) > self.pre_buffer_size:
+            self.frame_buffer.pop(0)  # Remove o frame mais antigo
+
+    def start_recording_with_prebuffer(self, segment_id):
+        """Inicia gravação incluindo frames do buffer"""
+        timestamp = time.strftime('%Y%m%d_%H%M%S')
+        output_path = os.path.join(EXTRACTION_DIR, f'segment_{segment_id}_{timestamp}.mp4')
+        
+        # Obter dimensões do frame
+        if self.frame_buffer:
+            h, w = self.frame_buffer[0].shape[:2]
+        else:
+            h, w = 480, 640  # Fallback
+        
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        writer = cv2.VideoWriter(output_path, fourcc, self.fps, (w, h))
+        
+        # Escrever frames do buffer (0.15s antes da detecção)
+        for buffered_frame in self.frame_buffer:
+            writer.write(buffered_frame)
+        
+        print(f"🟢 Iniciando gravação com {len(self.frame_buffer)} frames de pre-buffer ({self.pre_detection_seconds}s)")
+        return writer, output_path
 
 
 if __name__ == '__main__':
