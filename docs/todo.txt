@@ -1,0 +1,19 @@
+
+
+
+-Redimensionamento e normalização (ex: 224x224 RGB com valores entre 0 e 1)
+    -verificar viabilização de usar P&B para o treinamento
+
+-Extração de sequências temporais (janela deslizante de N frames, ex: 16 ou 32)
+
+-viabilizar com duas letras A e F com poucos frames para poupar recursos
+
+-dataset:
+    - a priori utilizar apenas frames
+    - testar futuramente frames+pontos
+    - frames+3d saliency
+    - frames+pontos+3d saliency
+
+
+- model 
+    -I3D (Inflated 3D ConvNet)	
